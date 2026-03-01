@@ -1,0 +1,7 @@
+[[customizations.user]]
+name = "gogo"
+password = "changeme"
+groups = ["wheel"]
+
+# [[customizations.user.ssh_authorized_keys]]
+# key = "ssh-ed25519 AAAA..."

@@ -20,5 +20,5 @@ just check          # Verify installed packages
 ## Rebase
 
 ```bash
-rpm-ostree rebase ostree-unverified-registry:ghcr.io/<owner>/bluefin-dx-gogo:latest
+rpm-ostree rebase ostree-unverified-registry:ghcr.io/gauravs/bluefin-dx-gogo:latest
 ```
