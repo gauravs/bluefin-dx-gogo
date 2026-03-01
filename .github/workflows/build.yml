@@ -1,0 +1,86 @@
+name: Build and Push Image
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+      - "Justfile"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flavor: ""
+            base_image: ghcr.io/ublue-os/bluefin-dx:stable
+            image_name: bluefin-dx-gogo
+          - flavor: nvidia
+            base_image: ghcr.io/ublue-os/bluefin-dx-nvidia-open:stable
+            image_name: bluefin-dx-gogo-nvidia
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.IMAGE_REGISTRY }}/${{ matrix.image_name }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=stable,enable={{is_default_branch}}
+            type=sha,prefix=
+            type=ref,event=pr
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        id: build
+        uses: redhat-actions/buildah-build@v2
+        with:
+          containerfiles: |
+            ./Containerfile
+          image: ${{ matrix.image_name }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BASE_IMAGE=${{ matrix.base_image }}
+          oci: true
+
+      - name: Push image
+        if: github.event_name != 'pull_request'
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build.outputs.image }}
+          tags: ${{ steps.build.outputs.tags }}
+          registry: ${{ env.IMAGE_REGISTRY }}
+
+      # Uncomment to enable cosign signing
+      # - name: Sign image
+      #   if: github.event_name != 'pull_request'
+      #   uses: sigstore/cosign-installer@v3
+      # - run: cosign sign --yes ${{ env.IMAGE_REGISTRY }}/${{ matrix.image_name }}@${{ steps.build.outputs.digest }}
